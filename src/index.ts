@@ -33,6 +33,34 @@ export default {
 
     const url = new URL(request.url);
 
+    // Models endpoint (OpenAI compatible)
+    if (url.pathname === '/v1/models' && request.method === 'GET') {
+      return new Response(JSON.stringify({
+        object: 'list',
+        data: [
+          {
+            id: '@cf/moonshotai/kimi-k2.5',
+            object: 'model',
+            created: 1710892800,
+            owned_by: 'moonshot-ai',
+            permission: [],
+            root: '@cf/moonshotai/kimi-k2.5',
+            parent: null,
+            context_window: 256000,
+            capabilities: {
+              function_calling: true,
+              reasoning: true,
+              vision: true,
+              streaming: true,
+              json_mode: true
+            }
+          }
+        ]
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Health check endpoint
     if (url.pathname === '/health') {
       return new Response(JSON.stringify({ status: 'ok', model: '@cf/moonshotai/kimi-k2.5' }), {
