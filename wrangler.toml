@@ -1,4 +1,4 @@
-name = "kimi-k2-5-worker"
+name = "kimi-worker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
