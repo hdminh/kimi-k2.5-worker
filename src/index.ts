@@ -1,5 +1,6 @@
 export interface Env {
   AI: Ai;
+  API_KEY?: string; // Optional API key for authentication
 }
 
 export default {
@@ -8,13 +9,27 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
     };
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
+
+    // API Key authentication (if configured)
+    const checkAuth = () => {
+      if (!env.API_KEY) return true; // No auth required if not configured
+      
+      const authHeader = request.headers.get('Authorization');
+      const apiKeyHeader = request.headers.get('X-API-Key');
+      
+      if (authHeader?.startsWith('Bearer ')) {
+        return authHeader.slice(7) === env.API_KEY;
+      }
+      
+      return apiKeyHeader === env.API_KEY;
+    };
 
     const url = new URL(request.url);
 
@@ -27,6 +42,13 @@ export default {
 
     // Chat endpoint
     if (url.pathname === '/chat' && request.method === 'POST') {
+      if (!checkAuth()) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       try {
         const body = await request.json() as any;
         const { messages, stream = false, temperature = 1, max_tokens } = body;
@@ -38,12 +60,18 @@ export default {
           });
         }
 
-        const aiResponse = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-          messages,
-          stream,
-          temperature,
-          ...(max_tokens && { max_tokens }),
-        });
+        // Add timeout and error handling
+        const aiResponse = await Promise.race([
+          env.AI.run('@cf/moonshotai/kimi-k2.5', {
+            messages,
+            stream,
+            temperature,
+            ...(max_tokens && { max_tokens }),
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('AI request timeout')), 25000)
+          )
+        ]);
 
         if (stream) {
           return new Response(aiResponse as ReadableStream, {
@@ -69,6 +97,13 @@ export default {
 
     // OpenAI-compatible endpoint
     if (url.pathname === '/v1/chat/completions' && request.method === 'POST') {
+      if (!checkAuth()) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       try {
         const body = await request.json() as any;
         const { messages, stream = false, temperature = 1, max_tokens, tools, tool_choice } = body;
